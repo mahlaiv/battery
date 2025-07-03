@@ -43,14 +43,20 @@
       letter-spacing: 1px;
       text-shadow: 0 1px 10px #fff8;
     }
-    .tap-hint {
+    .tap-hint, .perm-hint {
       color: #888;
       margin-top: 8px;
       font-size: 1.12em;
       letter-spacing: 0.2px;
       user-select: none;
-      opacity: 0.94;
+      opacity: 0.97;
       text-align: center;
+    }
+    .perm-hint {
+      color: #e53935;
+      font-weight: bold;
+      margin-top: 13px;
+      font-size: 1.14em;
     }
     @media (max-width: 500px) {
       .battery-svg { width: 99vw; max-width: 98vw; height: 41vw; max-height: 180px;}
@@ -72,22 +78,29 @@
       <text id="insidePercent" x="85" y="50" text-anchor="middle" alignment-baseline="middle" font-size="24" fill="#222" font-weight="bold"></text>
     </svg>
     <div class="battery-percentage" id="percentText"></div>
-    <div class="tap-hint">Tap the battery<br>or <b>shake your phone</b> to charge (+5%)</div>
+    <div class="tap-hint" id="tapHint">
+      Tap the battery<br>or <b>shake your phone</b> to charge (+5%)
+    </div>
+    <div class="perm-hint" id="permHint" style="display:none;">
+      Allow motion access in your browser to enable shake charging!
+    </div>
   </div>
   <script>
-    let percent = 5; // стартове значення
+    let percent = 5;
     const charge = document.getElementById('charge');
     const insidePercent = document.getElementById('insidePercent');
     const percentText = document.getElementById('percentText');
     const battery = document.getElementById('battery');
-
+    const permHint = document.getElementById('permHint');
+    const tapHint = document.getElementById('tapHint');
+    let motionAllowed = false;
     function percentToColor(p) {
       if (p <= 20) return "#E53935";
       if (p <= 49) return "#F9BE00";
       return "#4CAF50";
     }
     function drawBattery() {
-      const minW = 13; // battery not empty
+      const minW = 13;
       const maxW = 136;
       const barW = Math.round(minW + (maxW - minW) * percent/100);
       charge.setAttribute("width", barW);
@@ -106,12 +119,12 @@
 
     // --- Shake Detection ---
     let lastX = null, lastY = null, lastZ = null, lastTime = 0;
-    const SHAKE_THRESHOLD = 12; // чутливість (чим менше, тим чутливіше)
-    window.addEventListener('devicemotion', function(e){
+    const SHAKE_THRESHOLD = 13;
+    function shakeHandler(e){
       const acc = e.accelerationIncludingGravity;
       if (!acc) return;
       const curTime = new Date().getTime();
-      if ((curTime - lastTime) > 400) { // не частіше, ніж 1 раз на 0.4 cек
+      if ((curTime - lastTime) > 400) {
         lastTime = curTime;
         if (lastX !== null) {
           const diff = Math.abs(acc.x - lastX) + Math.abs(acc.y - lastY) + Math.abs(acc.z - lastZ);
@@ -121,16 +134,43 @@
         }
         lastX = acc.x; lastY = acc.y; lastZ = acc.z;
       }
-    });
+    }
 
-    // iOS requires permission for motion events
-    function askMotionPerm() {
+    function tryEnableMotion() {
       if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
-        DeviceMotionEvent.requestPermission().catch(()=>{}); // попросити дозвіл
+        DeviceMotionEvent.requestPermission()
+          .then(response => {
+            if (response === "granted") {
+              window.addEventListener('devicemotion', shakeHandler);
+              permHint.style.display = "none";
+              motionAllowed = true;
+            } else {
+              permHint.style.display = "";
+              motionAllowed = false;
+            }
+          })
+          .catch(()=>{
+            permHint.style.display = "";
+            motionAllowed = false;
+          });
+      } else if ('ondevicemotion' in window) {
+        window.addEventListener('devicemotion', shakeHandler);
+        permHint.style.display = "none";
+        motionAllowed = true;
+      } else {
+        permHint.innerHTML = "Motion/Shake not supported on this device or browser.";
+        permHint.style.display = "";
+        motionAllowed = false;
       }
     }
     // Попросити дозвіл на motion для iOS при першому кліку по батареї
-    battery.addEventListener('touchstart', askMotionPerm, {once:true});
+    battery.addEventListener('touchstart', tryEnableMotion, {once:true});
+    battery.addEventListener('mousedown', tryEnableMotion, {once:true});
+    // Або якщо клік не спрацював, показати підказку через 2с
+    setTimeout(()=>{
+      if (!motionAllowed) permHint.style.display = "";
+    }, 2500);
+
     drawBattery();
   </script>
 </body>

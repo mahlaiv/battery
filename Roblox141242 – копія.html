@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>iPhone Battery Shake Charge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      background: #f5f5f7;
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      flex-direction: column;
+    }
+    .battery-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      width: 100vw;
+      max-width: 420px;
+      margin-bottom: 40px;
+    }
+    .battery-svg {
+      width: 96vw;
+      max-width: 320px;
+      height: 38vw;
+      max-height: 150px;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+      box-shadow: 0 8px 28px #ccc7;
+      touch-action: manipulation;
+    }
+    .battery-percentage {
+      font-size: 2.2rem;
+      font-weight: 600;
+      color: #222;
+      margin-top: 16px;
+      letter-spacing: 1px;
+      text-shadow: 0 1px 10px #fff8;
+    }
+    .tap-hint {
+      color: #888;
+      margin-top: 8px;
+      font-size: 1.12em;
+      letter-spacing: 0.2px;
+      user-select: none;
+      opacity: 0.94;
+      text-align: center;
+    }
+    @media (max-width: 500px) {
+      .battery-svg { width: 99vw; max-width: 98vw; height: 41vw; max-height: 180px;}
+      .battery-percentage { font-size: 1.6rem; }
+      .battery-container { margin-bottom: 15vw; }
+    }
+  </style>
+</head>
+<body>
+  <div class="battery-container">
+    <svg id="battery" class="battery-svg" viewBox="0 0 190 85" fill="none">
+      <!-- Корпус -->
+      <rect x="10" y="17" width="150" height="51" rx="18" fill="#fff" stroke="#bdbdbd" stroke-width="4"/>
+      <!-- Контакт -->
+      <rect x="162" y="30" width="16" height="25" rx="8" fill="#bdbdbd" stroke="#bdbdbd" stroke-width="3"/>
+      <!-- Заряд (динамічно) -->
+      <rect id="charge" x="17" y="24" width="136" height="37" rx="12" fill="#E53935"/>
+      <!-- Відсоткова цифра -->
+      <text id="insidePercent" x="85" y="50" text-anchor="middle" alignment-baseline="middle" font-size="24" fill="#222" font-weight="bold"></text>
+    </svg>
+    <div class="battery-percentage" id="percentText"></div>
+    <div class="tap-hint">Tap the battery<br>or <b>shake your phone</b> to charge (+5%)</div>
+  </div>
+  <script>
+    let percent = 5; // стартове значення
+    const charge = document.getElementById('charge');
+    const insidePercent = document.getElementById('insidePercent');
+    const percentText = document.getElementById('percentText');
+    const battery = document.getElementById('battery');
+
+    function percentToColor(p) {
+      if (p <= 20) return "#E53935";
+      if (p <= 49) return "#F9BE00";
+      return "#4CAF50";
+    }
+    function drawBattery() {
+      const minW = 13; // battery not empty
+      const maxW = 136;
+      const barW = Math.round(minW + (maxW - minW) * percent/100);
+      charge.setAttribute("width", barW);
+      charge.setAttribute("fill", percentToColor(percent));
+      insidePercent.textContent = percent + "%";
+      percentText.textContent = percent + "%";
+    }
+    function chargeUp() {
+      if (percent < 100) {
+        percent += 5;
+        if (percent > 100) percent = 100;
+        drawBattery();
+      }
+    }
+    battery.addEventListener('click', chargeUp);
+
+    // --- Shake Detection ---
+    let lastX = null, lastY = null, lastZ = null, lastTime = 0;
+    const SHAKE_THRESHOLD = 12; // чутливість (чим менше, тим чутливіше)
+    window.addEventListener('devicemotion', function(e){
+      const acc = e.accelerationIncludingGravity;
+      if (!acc) return;
+      const curTime = new Date().getTime();
+      if ((curTime - lastTime) > 400) { // не частіше, ніж 1 раз на 0.4 cек
+        lastTime = curTime;
+        if (lastX !== null) {
+          const diff = Math.abs(acc.x - lastX) + Math.abs(acc.y - lastY) + Math.abs(acc.z - lastZ);
+          if (diff > SHAKE_THRESHOLD) {
+            chargeUp();
+          }
+        }
+        lastX = acc.x; lastY = acc.y; lastZ = acc.z;
+      }
+    });
+
+    // iOS requires permission for motion events
+    function askMotionPerm() {
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        DeviceMotionEvent.requestPermission().catch(()=>{}); // попросити дозвіл
+      }
+    }
+    // Попросити дозвіл на motion для iOS при першому кліку по батареї
+    battery.addEventListener('touchstart', askMotionPerm, {once:true});
+    drawBattery();
+  </script>
+</body>
+</html>
